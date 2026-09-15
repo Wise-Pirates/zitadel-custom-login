@@ -10,7 +10,10 @@ import { ReadonlyHeaders } from "next/dist/server/web/spec-extension/adapters/he
 export function getInstanceHost(headers: ReadonlyHeaders): string | null {
   // use standard proxy headers (x-forwarded-host → host) for both multi-tenant and self-hosted, do not use x-zitadel-instance-host
   const instanceHost =
-    headers.get("x-zitadel-instance-host") || headers.get("x-zitadel-forward-host") || headers.get("host");
+    headers.get("x-zitadel-instance-host") ||
+    headers.get("x-zitadel-forward-host") ||
+    process.env.ZITADEL_INSTANCE_HOST ||
+    headers.get("host");
 
   return instanceHost;
 }
