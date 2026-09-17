@@ -7,7 +7,6 @@ COPY . .
 ENV NEXT_PUBLIC_BASE_PATH="/ui/v2/login" \
     NEXT_TELEMETRY_DISABLED=1
 RUN pnpm install --frozen-lockfile
-RUN pnpm nx run-many --target generate
 RUN pnpm nx run @zitadel/login:build
 
 FROM node:24-alpine
