@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import ThemeSwitch from "@/components/theme-switch";
 import { LANGS, getLanguage } from "@/lib/i18n";
 import { getServiceConfig } from "@/lib/service-url";
-import { getAllowedLanguages } from "@/lib/zitadel";
+import { getAllowedLanguages, getBrandingSettings } from "@/lib/zitadel";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
@@ -21,9 +21,36 @@ const lato = Lato({
   subsets: ["latin"],
 });
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("common");
-  return { title: t("title") };
+
+  // Favicon: ícone da org (branding) quando o URL traz ?organization=, senão o
+  // favicon por omissão. Com basePath o browser não encontra /favicon.ico na
+  // raiz do domínio, por isso o ícone tem de ser declarado explicitamente.
+  const fallback = `${BASE_PATH}/favicon/favicon-32x32.png`;
+  let icon = fallback;
+  try {
+    const _headers = await headers();
+    const organization = _headers.get("x-zitadel-i18n-organization") || undefined;
+    if (organization) {
+      const { serviceConfig } = getServiceConfig(_headers);
+      const branding = await getBrandingSettings({ serviceConfig, organization });
+      icon = branding?.lightTheme?.iconUrl || branding?.darkTheme?.iconUrl || fallback;
+    }
+  } catch {
+    icon = fallback;
+  }
+
+  return {
+    title: t("title"),
+    icons: {
+      icon: [{ url: icon }],
+      shortcut: [{ url: `${BASE_PATH}/favicon/favicon.ico` }],
+      apple: [{ url: `${BASE_PATH}/favicon/apple-touch-icon.png` }],
+    },
+  };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

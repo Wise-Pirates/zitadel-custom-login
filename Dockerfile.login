@@ -8,6 +8,9 @@ ENV NEXT_PUBLIC_BASE_PATH="/ui/v2/login" \
     NEXT_TELEMETRY_DISABLED=1
 RUN pnpm install --frozen-lockfile
 RUN pnpm nx run @zitadel/login:build
+# O script de build copia public/ para a raiz do standalone, mas o servidor
+# corre em apps/login/ e procura public/ ali — sem isto os favicons dão 404.
+RUN cp -r apps/login/public apps/login/.next/standalone/apps/login/public
 
 FROM node:24-alpine
 WORKDIR /app
