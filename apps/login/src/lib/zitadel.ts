@@ -133,6 +133,36 @@ export async function getHostedLoginTranslation({
   );
 }
 
+/**
+ * Com o domínio do login registado como trusted domain, a API devolve os
+ * assets do branding (logo, ícone, fonte) no domínio público do login
+ * (`https://<login>/assets/...`), que fora do basePath dá 404. Os assets
+ * vivem na API — reescrevemos para o domínio de ZITADEL_API_URL.
+ */
+function toInstanceAssetUrl(url?: string): string | undefined {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    const api = new URL(process.env.ZITADEL_API_URL || "");
+    if (u.pathname.startsWith("/assets/") && u.host !== api.host) {
+      return `${api.origin}${u.pathname}${u.search}`;
+    }
+  } catch {
+    // URL relativo ou inválido: deixa como está
+  }
+  return url;
+}
+
+function withInstanceAssetUrls<T extends { lightTheme?: any; darkTheme?: any }>(settings: T): T {
+  for (const theme of [settings.lightTheme, settings.darkTheme]) {
+    if (!theme) continue;
+    theme.logoUrl = toInstanceAssetUrl(theme.logoUrl) ?? theme.logoUrl;
+    theme.iconUrl = toInstanceAssetUrl(theme.iconUrl) ?? theme.iconUrl;
+    theme.fontUrl = toInstanceAssetUrl(theme.fontUrl) ?? theme.fontUrl;
+  }
+  return settings;
+}
+
 export async function getBrandingSettings({
   serviceConfig,
   organization,
@@ -144,7 +174,7 @@ export async function getBrandingSettings({
 
     return settingsService
       .getBrandingSettings({ ctx: makeReqCtx(organization) }, {})
-      .then((resp) => (resp.settings ? resp.settings : undefined));
+      .then((resp) => (resp.settings ? withInstanceAssetUrls(resp.settings) : undefined));
   };
 
   return freshCache(
