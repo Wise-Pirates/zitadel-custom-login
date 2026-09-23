@@ -1,0 +1,13 @@
+# Só o login é construído; excluir o que pesa e não é preciso no build.
+apps/docs/**
+!apps/docs/package.json
+internal/
+cmd/
+benchmark/
+docs/
+statik/
+**/*.png
+!apps/login/**/*.png
+**/*.jpg
+**/*.gif
+**/*.mp4
