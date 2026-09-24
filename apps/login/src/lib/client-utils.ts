@@ -103,3 +103,22 @@ export function isSafeRedirectUri(uri: string): boolean {
     return false;
   }
 }
+
+/**
+ * Mensagem para quando o browser recusa criar a credencial WebAuthn. Sem isto
+ * o erro perdia-se e o botão "Continuar" não fazia nada (ex.: o dispositivo já
+ * tem uma passkey desta conta → InvalidStateError por causa do excludeCredentials).
+ */
+export function webauthnCreateErrorMessage(err: unknown): string {
+  const name = err instanceof DOMException || err instanceof Error ? err.name : "";
+  if (name === "InvalidStateError") {
+    return "Este dispositivo já tem uma passkey ou chave registada nesta conta. Usa outro dispositivo, ou remove a actual primeiro (na app, em Segurança da conta).";
+  }
+  if (name === "NotAllowedError") {
+    return "O registo foi cancelado ou expirou. Tenta outra vez.";
+  }
+  if (name === "NotSupportedError") {
+    return "Este browser ou dispositivo não suporta este tipo de passkey.";
+  }
+  return "Não foi possível registar a passkey. Tenta outra vez.";
+}

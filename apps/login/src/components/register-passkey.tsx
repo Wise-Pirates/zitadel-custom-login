@@ -1,6 +1,7 @@
 "use client";
 
 import { coerceToArrayBuffer, coerceToBase64Url } from "@/helpers/base64";
+import { webauthnCreateErrorMessage } from "@/lib/client-utils";
 import { registerPasskeyLink, verifyPasskeyRegistration } from "@/lib/server/passkeys";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -107,6 +108,7 @@ export function RegisterPasskey({
     }
 
     setLoading(true);
+    setError("");
 
     let regReq;
 
@@ -161,7 +163,14 @@ export function RegisterPasskey({
       });
     }
 
-    const credentials = await navigator.credentials.create(options);
+    let credentials: Credential | null;
+    try {
+      credentials = await navigator.credentials.create(options);
+    } catch (err) {
+      setError(webauthnCreateErrorMessage(err));
+      setLoading(false);
+      return;
+    }
 
     if (
       !credentials ||
