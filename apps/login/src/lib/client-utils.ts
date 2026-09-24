@@ -7,6 +7,8 @@ export type ServerActionResponse =
   | undefined
   | null;
 
+const EXTERNAL_REDIRECT_DELAY_MS = 800;
+
 export function handleServerActionResponse(
   response: ServerActionResponse,
   router: { push: (url: string) => void },
@@ -25,7 +27,15 @@ export function handleServerActionResponse(
         // by CSP connect-src 'self' for non-same-origin URLs.
         // CodeQL: This is safe — the URL is validated by isSafeRedirectUri above,
         // which blocks javascript:, data:, file:, blob:, and about: schemes.
-        window.location.href = response.redirect; // lgtm[js/client-side-unvalidated-url-redirection]
+        // Server actions que alteram cookies (passkey, U2F, password) fazem o
+        // Next refrescar a rota actual logo a seguir. Navegar para fora a meio
+        // desse refresh faz o Safari abortar o fetch e o Next mostra o ecrã
+        // "This page couldn't load" por um instante (flash). Esperar que o
+        // refresh termine antes de sair — o caminho OTP já espera 2 s.
+        const target = response.redirect;
+        setTimeout(() => {
+          window.location.assign(target); // lgtm[js/client-side-unvalidated-url-redirection]
+        }, EXTERNAL_REDIRECT_DELAY_MS);
       } else {
         router.push(response.redirect);
       }
