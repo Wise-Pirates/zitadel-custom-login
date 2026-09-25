@@ -9,6 +9,9 @@ import { getEnrollmentAuthorizationError } from "@/lib/server/enrollment-guard";
 import { getServiceConfig } from "@/lib/service-url";
 import { loadMostRecentSession } from "@/lib/session";
 import { addOTPEmail, addOTPSMS, getBrandingSettings, getLoginSettings, registerTOTP } from "@/lib/zitadel";
+import { relabelOtpUri } from "@/lib/client-utils";
+
+const OTP_ISSUER = process.env.OTP_ISSUER?.trim() || undefined;
 import { RegisterTOTPResponse } from "@zitadel/proto/zitadel/user/v2/user_service_pb";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -160,7 +163,7 @@ export default async function Page(props: {
         {totpResponse && "uri" in totpResponse && "secret" in totpResponse ? (
           <div>
             <TotpRegister
-              uri={totpResponse.uri as string}
+              uri={OTP_ISSUER ? relabelOtpUri(totpResponse.uri as string, OTP_ISSUER) : (totpResponse.uri as string)}
               secret={totpResponse.secret as string}
               loginName={loginName}
               sessionId={sessionId}

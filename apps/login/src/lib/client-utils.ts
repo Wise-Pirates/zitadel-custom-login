@@ -122,3 +122,22 @@ export function webauthnCreateErrorMessage(err: unknown): string {
   }
   return "Não foi possível registar a passkey. Tenta outra vez.";
 }
+
+/**
+ * O Zitadel constrói a URI do TOTP com "ZITADEL" como label e issuer fixos
+ * (v4.17.3: otpauth://totp/ZITADEL:<conta>?...&issuer=ZITADEL; não existe
+ * configuração nativa, ver discussions/5453 no upstream). A app autenticadora
+ * mostra esse texto como nome do serviço. Com OTP_ISSUER definido no serviço
+ * do login, reescrevemos só a etiqueta: secret/algorithm/digits/period ficam
+ * intactos, os códigos continuam válidos. Só afecta registos novos — entradas
+ * já guardadas mantêm o nome antigo (e continuam a funcionar).
+ */
+export function relabelOtpUri(uri: string, issuer: string): string {
+  const m = uri.match(/^(otpauth:\/\/totp\/)([^?]*)(\?.*)$/);
+  if (!m) return uri;
+  const label = m[2];
+  const account = label.includes(":") ? label.slice(label.indexOf(":") + 1) : label;
+  const params = new URLSearchParams(m[3].slice(1));
+  params.set("issuer", issuer);
+  return `${m[1]}${issuer}:${account}?${params.toString().replace(/\+/g, "%20")}`;
+}
