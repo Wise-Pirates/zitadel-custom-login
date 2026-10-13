@@ -27,6 +27,20 @@ type Props = {
   organization?: string;
 };
 
+/**
+ * Safari (macOS e iOS, incluindo Chrome/Firefox no iOS, que usam WebKit) só abre
+ * o Touch ID/Face ID se o `navigator.credentials.get` for chamado no próprio
+ * clique do utilizador. Sem gesto, ou depois de um pedido de rede à espera, dá
+ * `NotAllowedError` ("verificação cancelada") na 1.ª tentativa.
+ */
+export function isWebKit(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const ios = /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints ?? 0) > 1);
+  const safari = /Safari\//.test(ua) && !/(Chrome|Chromium|CriOS|FxiOS|Edg|OPR|Android)/.test(ua);
+  return ios || safari;
+}
+
 export function LoginPasskey({ loginName, sessionId, requestId, altPassword, organization, login = true }: Props) {
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -36,10 +50,36 @@ export function LoginPasskey({ loginName, sessionId, requestId, altPassword, org
   const router = useRouter();
 
   const initialized = useRef(false);
+  // Desafio WebAuthn pedido de antemão (só em WebKit), guardado como JSON porque
+  // `submitLoginAndContinue` converte os campos para ArrayBuffer em place.
+  const prefetchedChallenge = useRef<string | null>(null);
+  // Marca falha na tentativa actual (para só voltar a pedir desafio quando falhou).
+  const attemptFailed = useRef(false);
+
+  async function prefetchChallenge(keepError = false) {
+    try {
+      const response = await updateOrCreateSessionForChallenge(undefined, keepError);
+      const pK = response?.challenges?.webAuthN?.publicKeyCredentialRequestOptions?.publicKey;
+      if (!pK) {
+        setError(t("verify.errors.couldNotRequestChallenge"));
+        return;
+      }
+      prefetchedChallenge.current = JSON.stringify(pK);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!initialized.current) {
       initialized.current = true;
+      if (isWebKit()) {
+        // Sem prompt automático: pede só o desafio; o Touch ID abre no clique em "Continuar".
+        void prefetchChallenge();
+        return;
+      }
       setLoading(true);
       updateOrCreateSessionForChallenge()
         .then((response) => {
@@ -75,8 +115,9 @@ export function LoginPasskey({ loginName, sessionId, requestId, altPassword, org
     userVerificationRequirement: number = login
       ? UserVerificationRequirement.REQUIRED
       : UserVerificationRequirement.DISCOURAGED,
+    keepError = false,
   ) {
-    setError("");
+    if (!keepError) setError("");
     setLoading(true);
     const sessionResponse = await updateOrCreateSession({
       loginName,
@@ -123,6 +164,7 @@ export function LoginPasskey({ loginName, sessionId, requestId, altPassword, org
       const handled = handleServerActionResponse(response, router, setSamlData, setError);
 
       if (!handled) {
+        attemptFailed.current = true;
         if (!response) {
           setError(t("verify.errors.noResponseReceived"));
         } else {
@@ -130,6 +172,7 @@ export function LoginPasskey({ loginName, sessionId, requestId, altPassword, org
         }
       }
     } catch {
+      attemptFailed.current = true;
       setError(t("verify.errors.couldNotVerifyPasskey"));
     } finally {
       setLoading(false);
@@ -172,6 +215,7 @@ export function LoginPasskey({ loginName, sessionId, requestId, altPassword, org
         return submitLogin(data);
       })
       .catch((error) => {
+        attemptFailed.current = true;
         // Handle passkey cancellation or errors
         if (error?.name === "NotAllowedError") {
           setError(t("verify.errors.verificationCancelled"));
@@ -236,6 +280,26 @@ export function LoginPasskey({ loginName, sessionId, requestId, altPassword, org
           variant={ButtonVariants.Primary}
           disabled={loading}
           onClick={async () => {
+            if (prefetchedChallenge.current) {
+              // Chamada síncrona dentro do gesto do clique (obrigatório no Safari).
+              const pK = JSON.parse(prefetchedChallenge.current);
+              prefetchedChallenge.current = null;
+              setError("");
+              setLoading(true);
+              return submitLoginAndContinue(pK)
+                .catch((error) => {
+                  setError(error instanceof Error ? error.message : String(error));
+                })
+                .finally(() => {
+                  setLoading(false);
+                  // O desafio é de uso único: se falhou, pede outro para a próxima tentativa
+                  // (depois de um sucesso a página redirecciona, não se mexe na sessão).
+                  if (attemptFailed.current) {
+                    attemptFailed.current = false;
+                    void prefetchChallenge(true);
+                  }
+                });
+            }
             const response = await updateOrCreateSessionForChallenge().finally(() => {
               setLoading(false);
             });
