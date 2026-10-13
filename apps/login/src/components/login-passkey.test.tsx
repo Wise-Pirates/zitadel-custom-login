@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { LoginPasskey } from "./login-passkey";
 
 // Mock next/navigation
@@ -412,6 +412,77 @@ describe("LoginPasskey Component", () => {
           }),
         );
       });
+    });
+  });
+
+  describe("Safari / WebKit (precisa de gesto do utilizador)", () => {
+    const SAFARI_UA =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15";
+    const originalUA = navigator.userAgent;
+
+    const challengeResponse = () => ({
+      challenges: {
+        webAuthN: {
+          publicKeyCredentialRequestOptions: {
+            publicKey: { challenge: "AQID", allowCredentials: [{ id: "BAUG", type: "public-key" }] },
+          },
+        },
+      },
+    });
+
+    beforeEach(() => {
+      cleanup();
+      Object.defineProperty(navigator, "userAgent", { value: SAFARI_UA, configurable: true });
+    });
+
+    afterEach(() => {
+      cleanup();
+      Object.defineProperty(navigator, "userAgent", { value: originalUA, configurable: true });
+    });
+
+    test("não abre o prompt sozinho: só pede o desafio ao montar", async () => {
+      mockUpdateSession.mockResolvedValue(challengeResponse());
+
+      renderWithIntl(<LoginPasskey loginName="test@example.com" altPassword={false} />);
+
+      await waitFor(() => expect(mockUpdateSession).toHaveBeenCalledTimes(1));
+      expect(mockCredentialsGet).not.toHaveBeenCalled();
+    });
+
+    test("no clique chama navigator.credentials.get de imediato, sem pedir novo desafio", async () => {
+      mockUpdateSession.mockResolvedValue(challengeResponse());
+      mockCredentialsGet.mockReturnValue(new Promise(() => {})); // fica à espera do Touch ID
+
+      renderWithIntl(<LoginPasskey loginName="test@example.com" altPassword={false} />);
+      await waitFor(() => expect(mockUpdateSession).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByTestId("submit-button")).not.toBeDisabled());
+
+      fireEvent.click(screen.getByTestId("submit-button"));
+
+      // Síncrono dentro do clique: nenhum await entre o gesto e o get().
+      expect(mockCredentialsGet).toHaveBeenCalledTimes(1);
+      expect(mockUpdateSession).toHaveBeenCalledTimes(1);
+    });
+
+    test("se o Touch ID for cancelado, mostra o aviso e deixa pronto um novo desafio", async () => {
+      mockUpdateSession.mockResolvedValue(challengeResponse());
+      mockCredentialsGet.mockRejectedValue(Object.assign(new Error("cancelled"), { name: "NotAllowedError" }));
+
+      renderWithIntl(<LoginPasskey loginName="test@example.com" altPassword={false} />);
+      await waitFor(() => expect(mockUpdateSession).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByTestId("submit-button")).not.toBeDisabled());
+
+      fireEvent.click(screen.getByTestId("submit-button"));
+
+      await waitFor(() => expect(screen.getByText("Passkey verification was cancelled")).toBeInTheDocument());
+      await waitFor(() => expect(mockUpdateSession).toHaveBeenCalledTimes(2));
+
+      // 2.ª tentativa usa o desafio novo, também de imediato.
+      mockCredentialsGet.mockClear();
+      mockCredentialsGet.mockReturnValue(new Promise(() => {}));
+      await waitFor(() => expect(screen.getByTestId("submit-button")).not.toBeDisabled());
+      fireEvent.click(screen.getByTestId("submit-button"));
+      expect(mockCredentialsGet).toHaveBeenCalledTimes(1);
     });
   });
 
