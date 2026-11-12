@@ -1,0 +1,24 @@
+name: Login custom (duplos casts)
+
+on:
+  pull_request:
+    branches: [custom-login]
+    paths: ["apps/login/**", ".github/workflows/custom-login-casts.yml"]
+  push:
+    branches: [custom-login]
+    paths: ["apps/login/**", ".github/workflows/custom-login-casts.yml"]
+
+jobs:
+  casts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @zitadel/login --ignore-scripts
+      - name: Sem duplos casts
+        working-directory: apps/login
+        run: pnpm exec eslint --no-config-lookup -c eslint.casts.config.mjs src

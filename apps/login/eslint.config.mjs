@@ -75,6 +75,22 @@ export default [
       "no-undef": "off",
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/ban-ts-comment": "off",
+      // Wise Pirates: duplos casts calam o compilador e escondem tipos errados.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TSAsExpression > TSAsExpression.expression[typeAnnotation.type='TSUnknownKeyword']",
+          message: "Duplo cast `as unknown as` cala o compilador. Corrige o tipo na origem (narrowing, intersecção ou @ts-expect-error nos testes).",
+        },
+        {
+          selector: "TSAsExpression[typeAnnotation.type='TSNeverKeyword']",
+          message: "`as never` cala o compilador. Corrige o tipo na origem.",
+        },
+        {
+          selector: "TSTypeAssertion > TSTypeAssertion.expression[typeAnnotation.type='TSUnknownKeyword']",
+          message: "Duplo cast `<unknown>` cala o compilador. Corrige o tipo na origem.",
+        },
+      ],
       "@next/next/no-img-element": "off",
       "no-restricted-imports": [
         "error",
