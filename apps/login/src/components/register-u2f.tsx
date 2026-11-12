@@ -81,7 +81,7 @@ export function RegisterU2f({ loginName, sessionId, organization, requestId, che
       return;
     }
 
-    const u2fResponse = response as unknown as RegisterU2FResponse;
+    const u2fResponse: RegisterU2FResponse = response;
 
     const u2fId = u2fResponse.u2fId;
     const options: CredentialCreationOptions =

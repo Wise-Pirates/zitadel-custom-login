@@ -8,7 +8,8 @@ describe("isSafeRedirectUri", () => {
 
   test("should reject empty uri", async () => {
     expect(await isSafeRedirectUri("")).toBe(false);
-    expect(await isSafeRedirectUri(undefined as unknown as string)).toBe(false);
+    // @ts-expect-error: o valor pode chegar undefined em runtime (resposta da API sem redirect)
+    expect(await isSafeRedirectUri(undefined)).toBe(false);
   });
 
   test("should allow relative paths", async () => {
